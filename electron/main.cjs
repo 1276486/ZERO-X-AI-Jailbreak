@@ -566,7 +566,7 @@ function installArgs(targetId, promptFile) {
   const file = p(script);
 
   // 支持 -SkillsSource 的目标：技能源统一指向用户技能目录（绝对路径）。
-  const skills = ["codex", "zcode", "claude", "opencode", "dsh"].includes(targetId)
+  const skills = ["codex", "zcode", "claude", "opencode", "dsh", "workbuddy", "workbuddy-cn"].includes(targetId)
     ? ["-SkillsSource", ensureUserSkills()]
     : [];
 

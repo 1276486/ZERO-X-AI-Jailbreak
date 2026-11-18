@@ -359,15 +359,15 @@ node scripts/build.mjs pro
 
 | 文件 | 位置 |
 |---|---|
-| 安装器 `ZERO-X破甲-安装版-4.5.4.exe` | `release/` |
-| 便携包 `ZERO-X破甲-便携版-4.5.4.zip` | `release/` |
+| 安装器 `ZERO-X破甲-安装版-4.5.5.exe` | `release/` |
+| 便携包 `ZERO-X破甲-便携版-4.5.5.zip` | `release/` |
 | 免安装目录 `win-unpacked/` | `release/` |
 | 安装包内资源（脚本、memory、icon） | `release/win-unpacked/resources/` |
 
 ### 9.2 版本号有两个
 
 - **界面显示版本**：`variant.json` 的 `version`（当前 `2.0`），由构建写入；
-- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.4`）。
+- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.5`）。
 
 ### 9.3 卸载清理
 
@@ -465,7 +465,7 @@ node scripts/build.mjs pro
 | 项 | 值 |
 |---|---|
 | 界面版本 | 见 `variant.json`（当前 2.0） |
-| 安装包版本 | 见 `package.json`（当前 4.5.4） |
+| 安装包版本 | 见 `package.json`（当前 4.5.5） |
 | 交流群 | 764635322 |
 | 中转站 | https://tuomi.club · 1 元 = 官方 10 元额度 · `deepseek-v4.1-flash` 1 折起 · 满血不限速 · 兑换码在站点「兑换码填写处」或「公告栏」获取购买链接 |
 

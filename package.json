@@ -1,6 +1,6 @@
 {
   "name": "zerox-free",
-  "version": "4.5.4",
+  "version": "4.5.5",
   "private": true,
   "description": "ZERO-X破甲 · 桌面版",
   "main": "electron/main.cjs",

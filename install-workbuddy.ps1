@@ -224,7 +224,7 @@ if (-not ($Uninstall -or $RestoreMemory)) {
     if (-not (Test-Path -LiteralPath $SourcePrompt)) { throw "提示词文件不存在: $SourcePrompt" }
 }
 if (-not $SkillsSource) { $SkillsSource = if ($Version -eq 'v4') { 'codex-skills-v4' } else { 'codex-skills' } }
-$skillsSourceDir = Join-Path $Root $SkillsSource
+$skillsSourceDir = if ([System.IO.Path]::IsPathRooted($SkillsSource)) { $SkillsSource } else { Join-Path $Root $SkillsSource }
 
 $InstallRoot = Resolve-InstallRoot $InstallRoot
 # 是否由调用方显式指定了数据目录（国内版固定传 ~/.workbuddy）
