@@ -75,7 +75,14 @@ ZERO-X破甲是一个**指令注入管理器**。它本身不生成、也不内�
 
 <p align="center">群号 <b>764635322</b> · 扫码或搜索群号加入 · 永久免费</p>
 
-满血中转站：[https://tuomi.club](https://tuomi.club)
+### 满血中转站
+
+[**tuomi.club**](https://tuomi.club) · 低价主流模型 · 满血不限速
+
+- `deepseek-v4.1-flash` **1 折起**
+- **1 元 = 官方 10 元额度**
+- 主流模型齐全，日常够用
+- 满血、不限速
 
 ---
 
@@ -435,6 +442,6 @@ node scripts/build.mjs pro
 | 界面版本 | 见 `variant.json`（当前 2.0） |
 | 安装包版本 | 见 `package.json`（当前 4.5.0） |
 | 交流群 | 764635322 |
-| 中转站 | https://tuomi.club |
+| 中转站 | https://tuomi.club · 1 元 = 官方 10 元额度 · `deepseek-v4.1-flash` 1 折起 · 满血不限速 |
 
 使用前请阅读程序「关于」页内的免责声明。本工具只负责把文本写入本机软件的配置位置，不改变目标软件本身，也不对其输出负责。
