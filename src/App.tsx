@@ -36,6 +36,7 @@ import {
   type SkillItem,
   type SkillTargetState,
   type McpServer,
+  type InjectMode,
 } from "./lib/hs";
 import "./ui.css";
 import logo from "./assets/logo.png";
@@ -67,6 +68,8 @@ export function App() {
   const [memText, setMemText] = useState("");
   const [memSaved, setMemSaved] = useState("");
   const [memBusy, setMemBusy] = useState(false);
+  // 注入模式：full = memory 下完整提示词；targeted = memory/针对 下按目标的短提示词
+  const [injectMode, setInjectMode] = useState<InjectMode>("full");
   // 「技能」页：浏览与编辑随包技能库
   const [skillItems, setSkillItems] = useState<SkillItem[]>([]);
   const [skillTargets, setSkillTargets] = useState<Record<string, SkillTargetState>>({});
@@ -345,7 +348,16 @@ export function App() {
     [refresh],
   );
 
-  const install = (id: string) => run("正在安装", () => hs.install(id));
+  const install = (id: string) =>
+    run(injectMode === "targeted" ? "正在针对注入" : "正在安装", async () => {
+      const r = await hs.install(id, injectMode);
+      // 退出码 0 但回读没找到注入内容：明确提示，避免「显示已安装、实际没装」
+      if (r.ok && r.verified === false) {
+        setToast("安装完成，但未在目标文件里找到注入内容，请查看运行日志");
+      }
+      return r;
+    });
+
   const uninstall = (id: string) => run("正在卸载", () => hs.uninstall(id));
   const restore = (id: string) => run("正在装回原始记忆", () => hs.restoreMemory(id));
   const restartCodex = () => run("正在重启 Codex", async () => {
@@ -407,30 +419,56 @@ export function App() {
 
         <main className="zx-main">
           {section === "targets" && (
-            <section className="zx-grid">
-              {TARGETS.map((t) => {
-                const isOn = Boolean(installed[t.id]);
-                return (
-                  <article key={t.id} className={`zx-card${isOn ? " is-on" : ""}`}>
-                    <div className="zx-card__head">
-                      <h3>{t.title}</h3>
-                      <Badge variant={isOn ? "success" : "neutral"} label={isOn ? "已安装" : "未安装"} />
-                    </div>
-                    <p className="zx-card__desc">{t.desc}</p>
-                    <div className="zx-card__foot">
-                      <Button
-                        label={isOn ? "管理" : "安装"}
-                        variant={isOn ? "secondary" : "primary"}
-                        isDisabled={busy}
-                        onClick={() => setOpenTarget(t.id)}
-                      />
-                      <button type="button" className="zx-link" onClick={() => setOpenTarget(t.id)}>
-                        详情
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+            <section className="zx-targets">
+              <div className="zx-toolbar">
+                <span className="zx-hint">注入模式</span>
+                <div className="zx-seg" role="group" aria-label="注入模式">
+                  <button
+                    type="button"
+                    className={injectMode === "full" ? "is-active" : ""}
+                    onClick={() => setInjectMode("full")}
+                  >
+                    全量提示词
+                  </button>
+                  <button
+                    type="button"
+                    className={injectMode === "targeted" ? "is-active" : ""}
+                    onClick={() => setInjectMode("targeted")}
+                  >
+                    针对短提示词
+                  </button>
+                </div>
+                <span className="zx-hint">
+                  {injectMode === "full"
+                    ? "注入 memory 下的完整正文（当前默认）"
+                    : "按目标取 memory/针对 下的短提示词，适合 WorkBuddy 等有长度上限的客户端"}
+                </span>
+              </div>
+              <div className="zx-grid">
+                {TARGETS.map((t) => {
+                  const isOn = Boolean(installed[t.id]);
+                  return (
+                    <article key={t.id} className={`zx-card${isOn ? " is-on" : ""}`}>
+                      <div className="zx-card__head">
+                        <h3>{t.title}</h3>
+                        <Badge variant={isOn ? "success" : "neutral"} label={isOn ? "已安装" : "未安装"} />
+                      </div>
+                      <p className="zx-card__desc">{t.desc}</p>
+                      <div className="zx-card__foot">
+                        <Button
+                          label={isOn ? "管理" : "安装"}
+                          variant={isOn ? "secondary" : "primary"}
+                          isDisabled={busy}
+                          onClick={() => setOpenTarget(t.id)}
+                        />
+                        <button type="button" className="zx-link" onClick={() => setOpenTarget(t.id)}>
+                          详情
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             </section>
           )}
 

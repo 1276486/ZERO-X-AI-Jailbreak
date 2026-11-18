@@ -9,7 +9,15 @@ export type InstallResult = {
   timedOut: boolean;
   installed: InstalledMap;
   error?: string;
+  /** 回读校验结果：true=在目标文件里找到了注入内容；false=没找到；null=该目标无法校验 */
+  verified?: boolean | null;
+  verify?: { checked: boolean; found: boolean | null; files?: string[]; note?: string };
+  /** 本次注入实际使用的指令文件（全量或针对）。 */
+  promptName?: string;
+  mode?: "full" | "targeted";
 };
+
+export type InjectMode = "full" | "targeted";
 
 /** 重启 Codex：out 是 PowerShell 的原样输出，失败时 error 里带可读原因。 */
 export type RestartResult = { ok: boolean; code?: number; out?: string; error?: string };
@@ -86,7 +94,7 @@ export type HsApi = {
   mcpSave(server: Partial<McpServer>): Promise<{ ok: boolean; server?: McpServer; error?: string }>;
   mcpRemove(id: string): Promise<{ ok: boolean; id?: string; error?: string }>;
   mcpApply(targetId: string): Promise<McpApplyResult>;
-  install(targetId: string): Promise<InstallResult>;
+  install(targetId: string, mode?: InjectMode): Promise<InstallResult>;
   uninstall(targetId: string): Promise<InstallResult>;
   /** 装回原始记忆（仅 WorkBuddy）：还原安装前的记忆档案，保留技能库。 */
   restoreMemory(targetId: string): Promise<InstallResult>;

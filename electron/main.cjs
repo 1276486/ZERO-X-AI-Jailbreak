@@ -287,15 +287,16 @@ function scanSkillDir(root) {
   return items.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-/** 第一次打开时把随包技能复制到用户目录；之后用户增删改都落在这里。 */
+/** 把随包里新增（用户目录还没有）的技能复制过去；用户改过的不覆盖。 */
 function ensureUserSkills() {
   const dst = userSkillRoot();
   fs.mkdirSync(dst, { recursive: true });
-  if (scanSkillDir(dst).length) return dst;
   try {
     for (const e of fs.readdirSync(bundledSkillRoot(), { withFileTypes: true })) {
       if (!e.isDirectory()) continue;
-      fs.cpSync(path.join(bundledSkillRoot(), e.name), path.join(dst, e.name), { recursive: true });
+      const target = path.join(dst, e.name);
+      if (fs.existsSync(target)) continue;
+      fs.cpSync(path.join(bundledSkillRoot(), e.name), target, { recursive: true });
     }
   } catch {
     /* 没有随包技能就留空目录 */
@@ -487,6 +488,73 @@ function applyMcpServers(targetId) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, JSON.stringify(data, null, 2), "utf8");
   return { target: targetId, path: target, count: Object.keys(map).length };
+}
+
+/** 安装后的回读校验：目标文件里是否能找到注入标记或 ZERO-X 正文。 */
+function checkInjectedFiles(list) {
+  const re = /INJECT:BEGIN|注入开始|ZERO-X-CURSOR-INJECT/;
+  const hits = [];
+  for (const f of list) {
+    try {
+      const text = fs.readFileSync(f, "utf8");
+      if (re.test(text) || text.includes("ZERO-X")) hits.push(f);
+    } catch {
+      /* 文件不存在就跳过 */
+    }
+  }
+  return { checked: true, found: hits.length > 0, files: hits };
+}
+
+function verifyInstalled(targetId) {
+  const home = homeDir();
+  const xdg = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+  if (targetId === "doubao") return { checked: false, found: null, note: "云端记忆，无本地文件可校验" };
+  const map = {
+    codex: [path.join(codexHome(), "AGENTS.md"), path.join(codexHome(), "config.toml")],
+    zcode: [path.join(home, ".zcode", "AGENTS.md")],
+    claude: [path.join(home, ".claude", "CLAUDE.md")],
+    opencode: [path.join(xdg, "opencode", "AGENTS.md")],
+    dsh: [path.join(home, ".dsh", "AGENTS.md")],
+    cursor: [path.join(home, ".cursor", "rules", "ZERO-X注入.mdc")],
+  };
+  if (targetId === "workbuddy" || targetId === "workbuddy-cn") {
+    const dir = path.join(home, targetId === "workbuddy" ? ".workbuddy-ai" : ".workbuddy");
+    const files = [path.join(dir, "MEMORY.md")];
+    try {
+      for (const f of fs.readdirSync(path.join(dir, "memory"))) {
+        if (f.toLowerCase().endsWith("_memory.md")) files.push(path.join(dir, "memory", f));
+      }
+    } catch {
+      /* 没有 memory 目录就只查 MEMORY.md */
+    }
+    return checkInjectedFiles(files);
+  }
+  return checkInjectedFiles(map[targetId] || []);
+}
+
+/**
+   针对注入用的短提示词：memory/针对/<目标 id>.md，没有就退到 memory/针对/默认.md，
+   再没有就用随包的 zerox-core 技能。给 WorkBuddy 这类有长度上限的客户端用。
+*/
+function targetedPrompt(targetId) {
+  const dir = p(MEMORY_DIR, "针对");
+  for (const name of [`${targetId}.md`, "默认.md"]) {
+    const full = path.join(dir, name);
+    try {
+      const text = fs.readFileSync(full, "utf8");
+      if (text.trim()) return { path: full, name: `针对/${name}`, chars: text.trim().length };
+    } catch {
+      /* 试下一个 */
+    }
+  }
+  const core = path.join(bundledSkillRoot(), "zerox-core", "SKILL.md");
+  try {
+    const text = fs.readFileSync(core, "utf8");
+    if (text.trim()) return { path: core, name: "zerox-core/SKILL.md", chars: text.trim().length };
+  } catch {
+    /* 没有兜底 */
+  }
+  return null;
 }
 
 /**
@@ -808,26 +876,42 @@ function registerIpc() {
      安装：把 memory/ 里用户填的提示词注入目标。
      记忆为空时直接失败 —— 宁可报错，也不要把空内容写进用户的 AGENTS.md / 记忆档案。
   */
-  ipcMain.handle("tool:install", async (_e, targetId) => {
+  /**
+     安装：mode = "full" 用 memory/ 下的完整提示词；mode = "targeted" 用 memory/针对 下的短提示词。
+     记忆为空时直接失败 —— 宁可报错，也不要把空内容写进用户的 AGENTS.md / 记忆档案。
+  */
+  ipcMain.handle("tool:install", async (_e, targetId, mode) => {
     const installed = installedSnapshot().installed;
     if (!SCRIPTS[targetId]) {
       return { ok: false, code: -1, timedOut: false, out: `未知的破甲目标：${targetId}`, installed };
     }
-    const prompt = memoryPrompt();
+    const useTargeted = mode === "targeted";
+    const prompt = useTargeted ? targetedPrompt(targetId) : memoryPrompt();
     if (!prompt) {
-      const dir = p(MEMORY_DIR);
-      const text = `记忆文件为空：请先把提示词粘进 ${dir} 下的 .md 文件，再点安装。`;
+      const text = useTargeted
+        ? `没有可用的针对提示词：请在 ${p(MEMORY_DIR, "针对")} 下放 ${targetId}.md 或 默认.md`
+        : `记忆文件为空：请先把提示词粘进 ${p(MEMORY_DIR)} 下的 .md 文件，再点安装。`;
       send("tool:status", { label: "指令文件为空", state: "idle" });
       send("tool:log", { label: "安装已中止", text: text + "\n" });
       return { ok: false, code: -1, timedOut: false, out: text, error: text, installed };
     }
-    const res = await runPowerShell(installArgs(targetId, prompt.path), `安装 ${targetId}`, INSTALL_TIMEOUT);
+    const label = `安装 ${targetId}（${useTargeted ? "针对" : "全量"}）`;
+    const res = await runPowerShell(installArgs(targetId, prompt.path), label, INSTALL_TIMEOUT);
     if (res.ok) {
       const st = loadState();
       st.installed[targetId] = prompt.name;
       saveState({ installed: st.installed });
     }
-    return { ...res, installed: installedSnapshot().installed };
+    // 回读校验：退出码 0 不代表内容真的写进去了（文件被占用、路径变更都可能假成功）
+    const verify = res.ok ? verifyInstalled(targetId) : null;
+    return {
+      ...res,
+      verified: verify ? verify.found : null,
+      verify,
+      promptName: prompt.name,
+      mode: useTargeted ? "targeted" : "full",
+      installed: installedSnapshot().installed,
+    };
   });
 
   ipcMain.handle("tool:uninstall", async (_e, targetId) => {
@@ -1091,8 +1175,8 @@ async function captureAll(dir) {
       const b = [...document.querySelectorAll('[role="tab"],button')].find(x=>((x.innerText||'').trim()==='MCP'));
       if (!b) return 'no-tab';
       b.click();
-      await new Promise((r) => setTimeout(r, 900));
-      return 'mcp-open';
+      await new Promise((r) => setTimeout(r, 1500));
+      return document.body.innerText.includes('MCP 服务器') ? 'mcp-open' : 'mcp-not-rendered';
     })()`],
     // 技能页顺带做一次增删自检：新建 → 写正文 → 删除，全程落在用户技能目录
     ["08-skill-crud", `(async () => {

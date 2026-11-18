@@ -16,7 +16,7 @@ contextBridge.exposeInMainWorld("hs", {
   mcpSave: (server) => ipcRenderer.invoke("tool:mcp:save", server),
   mcpRemove: (id) => ipcRenderer.invoke("tool:mcp:remove", id),
   mcpApply: (targetId) => ipcRenderer.invoke("tool:mcp:apply", targetId),
-  install: (targetId) => ipcRenderer.invoke("tool:install", targetId),
+  install: (targetId, mode) => ipcRenderer.invoke("tool:install", targetId, mode),
   uninstall: (targetId) => ipcRenderer.invoke("tool:uninstall", targetId),
   // 装回原始记忆：还原安装前的记忆档案，保留技能库（仅 WorkBuddy）
   restoreMemory: (targetId) => ipcRenderer.invoke("tool:restoreMemory", targetId),
