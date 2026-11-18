@@ -348,15 +348,36 @@ export function App() {
     [refresh],
   );
 
-  const install = (id: string) =>
-    run(injectMode === "targeted" ? "正在针对注入" : "正在安装", async () => {
-      const r = await hs.install(id, injectMode);
-      // 退出码 0 但回读没找到注入内容：明确提示，避免「显示已安装、实际没装」
-      if (r.ok && r.verified === false) {
-        setToast("安装完成，但未在目标文件里找到注入内容，请查看运行日志");
+  /**
+     安装：默认全量。全量失败或回读没找到注入内容时，询问用户是否改用针对短提示词重试，
+     不自动切换——由用户决定。
+  */
+  const installWithMode = (id: string, mode: InjectMode) =>
+    run(mode === "targeted" ? "正在针对注入" : "正在安装", async () => {
+      const r = await hs.install(id, mode);
+      const failed = !r.ok;
+      const unverified = r.ok && r.verified === false;
+      if (!failed && !unverified) return r;
+
+      if (mode === "full") {
+        const why = failed
+          ? (r.error || r.out || "安装失败")
+          : "安装完成，但未在目标文件里找到注入内容";
+        const go = window.confirm(
+          `全量注入未成功：${String(why).slice(0, 160)}\n\n是否改用「针对短提示词」重试？`,
+        );
+        if (go) {
+          setInjectMode("targeted");
+          return await hs.install(id, "targeted");
+        }
+        return r;
       }
+
+      if (unverified) setToast("完成，但未在目标文件里找到注入内容，请查看运行日志");
       return r;
     });
+
+  const install = (id: string) => installWithMode(id, injectMode);
 
   const uninstall = (id: string) => run("正在卸载", () => hs.uninstall(id));
   const restore = (id: string) => run("正在装回原始记忆", () => hs.restoreMemory(id));
@@ -440,8 +461,8 @@ export function App() {
                 </div>
                 <span className="zx-hint">
                   {injectMode === "full"
-                    ? "注入 memory 下的完整正文（当前默认）"
-                    : "按目标取 memory/针对 下的短提示词，适合 WorkBuddy 等有长度上限的客户端"}
+                    ? "默认使用全量：注入 memory 下的完整正文；失败后会问你是否改用针对版重试"
+                    : "按目标取 memory/针对 下的短提示词；全量失败并选择重试时使用"}
                 </span>
               </div>
               <div className="zx-grid">

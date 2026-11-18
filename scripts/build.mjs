@@ -24,8 +24,8 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const variant = process.argv[2] ||
   JSON.parse(readFileSync(join(appDir, "variant.json"), "utf8")).variant;
 
-/** 界面左上角与个人中心展示的版本号（与安装包文件名的版本无关）。 */
-const DISPLAY_VERSION = "2.0";
+/** 界面展示的版本号：直接取 package.json，避免与安装包版本脱节。 */
+const DISPLAY_VERSION = JSON.parse(readFileSync(join(appDir, "package.json"), "utf8")).version;
 
 const VARIANTS = {
   free: {
