@@ -1,0 +1,359 @@
+/* ZERO-X破甲 · 新界面样式（独立实现） */
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0d0f12;
+  color: #e6e8eb;
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.zx {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgba(224, 168, 58, 0.08), transparent 55%),
+    #0d0f12;
+}
+
+/* ---------- top bar ---------- */
+
+.zx-top {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #22262c;
+  flex-shrink: 0;
+  /* 无边框窗口：整条顶栏即拖拽区 */
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* 顶栏里的可点击元素要显式退出拖拽区，否则点不动 */
+.zx-top button,
+.zx-top a,
+.zx-top [role="tab"],
+.zx-top [role="tablist"],
+.zx-top__right {
+  -webkit-app-region: no-drag;
+}
+
+.zx-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zx-brand__mark {
+  width: 26px;
+  height: 26px;
+  display: block;
+  border-radius: 7px;
+  object-fit: cover;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  -webkit-user-drag: none;
+}
+
+.zx-brand__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.zx-brand__ver {
+  font-size: 11px;
+  color: #6f7785;
+}
+
+.zx-top__right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.zx-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #9aa3af;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zx-win {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #262a30;
+  border-radius: 7px;
+  background: transparent;
+  color: #9aa3af;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.zx-win:hover {
+  background: #1a1e24;
+  color: #e6e8eb;
+}
+
+/* ---------- main ---------- */
+
+.zx-main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 20px 24px;
+}
+
+.zx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.zx-card,
+.zx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #23272e;
+  border-radius: 14px;
+  background: linear-gradient(165deg, #15181d 0%, #111419 100%);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.zx-card:hover {
+  border-color: #3a4049;
+  transform: translateY(-1px);
+}
+
+.zx-card.is-on {
+  border-color: rgba(224, 168, 58, 0.45);
+}
+
+.zx-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.zx-card__head h3,
+.zx-panel h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.zx-card__desc {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #8b93a1;
+}
+
+.zx-card__foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.zx-link {
+  border: none;
+  background: transparent;
+  color: #e0a83a;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.zx-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.zx-tools,
+.zx-about {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
+}
+
+.zx-skills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.zx-skills label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: #c5cdd6;
+}
+
+.zx-skills em {
+  font-style: normal;
+  color: #6f7785;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- log ---------- */
+
+.zx-log {
+  border-top: 1px solid #22262c;
+  flex-shrink: 0;
+}
+
+.zx-log__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #9aa3af;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zx-log__hint {
+  color: #6f7785;
+}
+
+.zx-log__body {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 10px 16px 14px;
+  border-top: 1px solid #1c2026;
+  background: #0a0c0f;
+  color: #9fe3b0;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.zx-log__body--inline {
+  max-height: 220px;
+  border: 1px solid #22262c;
+  border-radius: 10px;
+}
+
+/* ---------- drawer ---------- */
+
+.zx-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px;
+  min-width: 320px;
+}
+
+.zx-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #6f7785;
+}
+
+/* ---------- memory ---------- */
+
+.zx-memory {
+  display: flex;
+  min-height: 0;
+}
+
+.zx-memory__panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.zx-mem__text {
+  width: 100%;
+  height: calc(100vh - 330px);
+  min-height: 260px;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid #22262c;
+  border-radius: 10px;
+  background: #0b0d10;
+  color: #c9ced6;
+  font-family: "Microsoft YaHei", "PingFang SC", ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  outline: none;
+}
+
+.zx-mem__text:focus {
+  border-color: rgba(224, 168, 58, 0.45);
+}
+
+/* ---------- toast ---------- */
+
+.zx-tutorial {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid #22262c;
+  border-radius: 10px;
+  background: #0b0d10;
+  color: #c9ced6;
+  font-family: "Microsoft YaHei", "PingFang SC", ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(100vh - 220px);
+}
+
+.zx-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  max-width: min(680px, 90vw);
+  padding: 10px 16px;
+  border: 1px solid rgba(224, 168, 58, 0.45);
+  border-radius: 10px;
+  background: #1a1509;
+  color: #f0c060;
+  font-size: 12.5px;
+  cursor: pointer;
+  z-index: 80;
+}
