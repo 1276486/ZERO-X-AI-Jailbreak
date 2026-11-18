@@ -14,6 +14,8 @@ export type InstallResult = {
   verify?: { checked: boolean; found: boolean | null; files?: string[]; note?: string };
   /** 本次注入实际使用的指令文件（全量或针对）。 */
   promptName?: string;
+  /** 卸载时是否还原了强化补丁（附说明）。 */
+  patchNote?: string;
   mode?: "full" | "targeted";
 };
 
@@ -71,6 +73,35 @@ export type McpApplyResult = {
   error?: string;
 };
 
+/** 深度补丁条目：客户端打包文件里的等长替换。 */
+export type PatchState = "applied" | "pending" | "skipped" | "missing";
+
+export type PatchItem = {
+  id: string;
+  client: string;
+  label: string;
+  detail: string;
+  state: PatchState;
+  file?: string | null;
+  fromTotal?: number;
+  toTotal?: number;
+  backup?: boolean;
+  /** 客户端进程是否正在运行（运行中无法写入其 asar）。 */
+  running?: boolean;
+  error?: string;
+  anchors: { from: string; to: string }[];
+};
+
+export type PatchActionResult = {
+  ok: boolean;
+  file?: string;
+  changed?: number;
+  backup?: string;
+  restoredFrom?: string;
+  size?: number;
+  error?: string;
+};
+
 export type AppState = {
   installed: InstalledMap;
   version: string;
@@ -94,6 +125,9 @@ export type HsApi = {
   mcpSave(server: Partial<McpServer>): Promise<{ ok: boolean; server?: McpServer; error?: string }>;
   mcpRemove(id: string): Promise<{ ok: boolean; id?: string; error?: string }>;
   mcpApply(targetId: string): Promise<McpApplyResult>;
+  patchList(): Promise<PatchItem[]>;
+  patchApply(id: string): Promise<PatchActionResult>;
+  patchRevert(id: string): Promise<PatchActionResult>;
   install(targetId: string, mode?: InjectMode): Promise<InstallResult>;
   uninstall(targetId: string): Promise<InstallResult>;
   /** 装回原始记忆（仅 WorkBuddy）：还原安装前的记忆档案，保留技能库。 */

@@ -11,6 +11,7 @@ const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const patcher = require("./patcher.cjs");
 
 // 应用名由构建变体决定（scripts/build.mjs 写入 variant.json）
 let APP_NAME = "ZERO-X破甲";
@@ -538,7 +539,12 @@ function verifyInstalled(targetId) {
 */
 function targetedPrompt(targetId) {
   const dir = p(MEMORY_DIR, "针对");
-  for (const name of [`${targetId}.md`, "默认.md"]) {
+  // WorkBuddy 的记忆块硬上限是 2,000 字符（客户端内嵌校验，暂时打不了补丁），
+  // 优先用专门的 2K 版，避免长文被截断后只剩开头。
+  const names = [];
+  if (targetId === "workbuddy" || targetId === "workbuddy-cn") names.push("workbuddy-2k.md");
+  names.push(`${targetId}.md`, "默认.md");
+  for (const name of names) {
     const full = path.join(dir, name);
     try {
       const text = fs.readFileSync(full, "utf8");
@@ -872,6 +878,29 @@ function registerIpc() {
     }
   });
 
+  /** 深度补丁：客户端打包文件里的等长替换（记忆上限、指令预算等）。 */
+  ipcMain.handle("tool:patch:list", () => patcher.patchTable().map((e) => patcher.status(e)));
+  ipcMain.handle("tool:patch:apply", (_e, id) => {
+    try {
+      const entry = patcher.patchTable().find((e) => e.id === id);
+      if (!entry) throw new Error("未知补丁：" + id);
+      const r = patcher.apply(entry);
+      return { ok: true, ...r };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+  ipcMain.handle("tool:patch:revert", (_e, id) => {
+    try {
+      const entry = patcher.patchTable().find((e) => e.id === id);
+      if (!entry) throw new Error("未知补丁：" + id);
+      const r = patcher.revert(entry);
+      return { ok: true, ...r };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+
   /**
      安装：把 memory/ 里用户填的提示词注入目标。
      记忆为空时直接失败 —— 宁可报错，也不要把空内容写进用户的 AGENTS.md / 记忆档案。
@@ -944,7 +973,22 @@ function registerIpc() {
       res.ok = false;
       res.error = sweep.error || "提示词残留清理失败";
     }
-    return { ...res, installed: installedSnapshot().installed };
+
+    // 深度补丁：卸载时默认一并还原，把客户端打包文件恢复到打补丁之前。
+    // 客户端正在运行时文件被占用，还原会失败——只记录，不改变卸载结果。
+    let patchNote = "";
+    try {
+      const entry = patcher.patchTable().find((e) => e.client === targetId);
+      if (entry && patcher.status(entry).backup) {
+        const pr = patcher.revert(entry);
+        patchNote = `已还原强化补丁：${pr.file}`;
+      }
+    } catch (e) {
+      patchNote = `强化补丁还原失败：${String((e && e.message) || e)}`;
+    }
+    if (patchNote) res.out = (res.out || "") + "\n" + patchNote + "\n";
+
+    return { ...res, patchNote, installed: installedSnapshot().installed };
   });
 
   // 装回原始记忆：把该目标的注入内容还原成原版，技能库保留。
@@ -1070,6 +1114,8 @@ function createWindow() {
     roundedCorners: true,
     backgroundColor: "#0d0f12",
     title: APP_NAME,
+    // 开发模式（electron .）默认套 Electron 图标；显式指定后任务栏/窗口标题栏才显示自己的
+    icon: path.join(__dirname, "..", "build", "icon-256.png"),
     /*
       无边框窗口：标题栏由界面自绘（顶栏即拖拽区），圆角交给 Windows 11 的
       DWM 处理——比 transparent+CSS 圆角稳得多，透明窗口在 Windows 上不能缩放。
@@ -1404,6 +1450,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    // Windows 任务栏按 AppUserModelID 归组；开发模式不设就会显示成 Electron
+    if (!app.isPackaged) app.setAppUserModelId("com.zerox.desktop");
     registerIpc();
     createWindow();
     setupTray();

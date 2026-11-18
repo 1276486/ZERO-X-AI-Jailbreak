@@ -37,6 +37,7 @@ import {
   type SkillTargetState,
   type McpServer,
   type InjectMode,
+  type PatchItem,
 } from "./lib/hs";
 import "./ui.css";
 import logo from "./assets/logo.png";
@@ -49,6 +50,13 @@ const STATUS_DOT: Record<Tone, "neutral" | "accent" | "success" | "error"> = {
   busy: "accent",
   ok: "success",
   err: "error",
+};
+
+const PATCH_LABEL: Record<string, string> = {
+  applied: "已应用",
+  pending: "未应用",
+  skipped: "锚点不匹配",
+  missing: "未找到文件",
 };
 
 export function App() {
@@ -89,6 +97,17 @@ export function App() {
   const [mcpArgs, setMcpArgs] = useState("");
   const [mcpEnv, setMcpEnv] = useState("");
   const [mcpBusy, setMcpBusy] = useState(false);
+  // 「深度」页：客户端打包文件补丁（等长替换）
+  const [patches, setPatches] = useState<PatchItem[]>([]);
+  const [patchBusy, setPatchBusy] = useState(false);
+  // 每个目标的「强化补丁破甲」开关，默认开启（未显式关闭即为 true）
+  const [patchEnabled, setPatchEnabled] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("zx.patchEnabled") || "{}");
+    } catch {
+      return {};
+    }
+  });
 
   useEffect(() => {
     document.title = APP_NAME;
@@ -287,6 +306,55 @@ export function App() {
     setToast(`已写入 ${targetId}（${r.count} 个）`);
   };
 
+  // 「深度」页：客户端补丁
+  const loadPatches = useCallback(async () => {
+    setPatches(await hs.patchList());
+  }, []);
+
+  useEffect(() => {
+    void loadPatches();
+  }, [loadPatches]);
+
+  const applyPatch = async (id: string) => {
+    setPatchBusy(true);
+    try {
+      const r = await hs.patchApply(id);
+      setToast(r.ok ? `已应用补丁：替换 ${r.changed} 处` : "应用失败：" + (r.error || "未知错误"));
+      await loadPatches();
+    } finally {
+      setPatchBusy(false);
+    }
+  };
+
+  const revertPatch = async (id: string) => {
+    setPatchBusy(true);
+    try {
+      const r = await hs.patchRevert(id);
+      setToast(r.ok ? "已从备份还原" : "还原失败：" + (r.error || "未知错误"));
+      await loadPatches();
+    } finally {
+      setPatchBusy(false);
+    }
+  };
+
+  const patchOf = (targetId: string) => patches.find((p) => p.client === targetId);
+  const patchOn = (targetId: string) => patchEnabled[targetId] !== false;
+
+  /** 勾选即应用，取消勾选即从备份还原。 */
+  const togglePatch = async (targetId: string, on: boolean) => {
+    const next = { ...patchEnabled, [targetId]: on };
+    setPatchEnabled(next);
+    try {
+      localStorage.setItem("zx.patchEnabled", JSON.stringify(next));
+    } catch {
+      /* 隐私模式下写不了就只在内存生效 */
+    }
+    const p = patchOf(targetId);
+    if (!p) return;
+    if (on) await applyPatch(p.id);
+    else await revertPatch(p.id);
+  };
+
   const saveMemory = async () => {
     setMemBusy(true);
     try {
@@ -354,6 +422,16 @@ export function App() {
   */
   const installWithMode = (id: string, mode: InjectMode) =>
     run(mode === "targeted" ? "正在针对注入" : "正在安装", async () => {
+      // 勾了「强化补丁破甲」的目标：安装前先把补丁打上（失败不阻塞安装）
+      const pe = patches.find((x) => x.client === id);
+      if (pe && patchEnabled[id] !== false && pe.state === "pending") {
+        try {
+          await hs.patchApply(pe.id);
+          await loadPatches();
+        } catch {
+          /* 客户端运行中或锚点不匹配，安装继续 */
+        }
+      }
       const r = await hs.install(id, mode);
       const failed = !r.ok;
       const unverified = r.ok && r.verified === false;
@@ -379,7 +457,13 @@ export function App() {
 
   const install = (id: string) => installWithMode(id, injectMode);
 
-  const uninstall = (id: string) => run("正在卸载", () => hs.uninstall(id));
+  const uninstall = (id: string) =>
+    run("正在卸载", async () => {
+      const r = await hs.uninstall(id);
+      // 卸载默认会还原强化补丁，结果直接提示出来
+      if (r.patchNote) setToast(r.patchNote);
+      return r;
+    });
   const restore = (id: string) => run("正在装回原始记忆", () => hs.restoreMemory(id));
   const restartCodex = () => run("正在重启 Codex", async () => {
     const r = await hs.restartCodex();
@@ -475,6 +559,17 @@ export function App() {
                         <Badge variant={isOn ? "success" : "neutral"} label={isOn ? "已安装" : "未安装"} />
                       </div>
                       <p className="zx-card__desc">{t.desc}</p>
+                    {patches.some((p) => p.client === t.id) && (
+                      <label className="zx-check">
+                        <input
+                          type="checkbox"
+                          checked={patchEnabled[t.id] !== false}
+                          disabled={patchBusy}
+                          onChange={(e) => void togglePatch(t.id, e.target.checked)}
+                        />
+                        <span>强化补丁破甲</span>
+                      </label>
+                    )}
                       <div className="zx-card__foot">
                         <Button
                           label={isOn ? "管理" : "安装"}

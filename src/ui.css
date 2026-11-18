@@ -536,3 +536,48 @@ body {
   border-radius: 999px;
   padding: 2px 10px;
 }
+
+/* ---------- 强化补丁勾选框 ---------- */
+
+.zx-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #8b93a1;
+  margin: 2px 0 4px;
+}
+
+.zx-check input {
+  accent-color: #e0a83a;
+}
+
+/* ---------- 深度补丁 ---------- */
+
+.zx-patch {
+  display: flex;
+  min-height: 0;
+}
+
+.zx-patch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.zx-patch-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid #22262c;
+  border-radius: 12px;
+  background: #0f1216;
+}
+
+.zx-patch-item h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
