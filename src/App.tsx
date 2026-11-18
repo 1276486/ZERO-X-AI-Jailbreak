@@ -33,11 +33,14 @@ import {
   hs,
   type InstalledMap,
   type MemoryPrompt,
+  type SkillItem,
+  type SkillTargetState,
+  type McpServer,
 } from "./lib/hs";
 import "./ui.css";
 import logo from "./assets/logo.png";
 
-type Section = "targets" | "memory" | "about";
+type Section = "targets" | "memory" | "skills" | "mcp" | "about";
 type Tone = "idle" | "busy" | "ok" | "err";
 
 const STATUS_DOT: Record<Tone, "neutral" | "accent" | "success" | "error"> = {
@@ -64,6 +67,25 @@ export function App() {
   const [memText, setMemText] = useState("");
   const [memSaved, setMemSaved] = useState("");
   const [memBusy, setMemBusy] = useState(false);
+  // 「技能」页：浏览与编辑随包技能库
+  const [skillItems, setSkillItems] = useState<SkillItem[]>([]);
+  const [skillTargets, setSkillTargets] = useState<Record<string, SkillTargetState>>({});
+  const [skillId, setSkillId] = useState("");
+  const [skillText, setSkillText] = useState("");
+  const [skillSaved, setSkillSaved] = useState("");
+  const [skillBusy, setSkillBusy] = useState(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillDesc, setNewSkillDesc] = useState("");
+  // 「MCP」页：注册表 + 一键写入客户端
+  const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+  const [mcpTargets, setMcpTargets] = useState<Record<string, string>>({});
+  const [mcpFile, setMcpFile] = useState("");
+  const [mcpId, setMcpId] = useState("");
+  const [mcpName, setMcpName] = useState("");
+  const [mcpCommand, setMcpCommand] = useState("");
+  const [mcpArgs, setMcpArgs] = useState("");
+  const [mcpEnv, setMcpEnv] = useState("");
+  const [mcpBusy, setMcpBusy] = useState(false);
 
   useEffect(() => {
     document.title = APP_NAME;
@@ -89,6 +111,178 @@ export function App() {
   }, [section, loadMemory]);
 
   const memDirty = memText !== memSaved;
+
+  // 「技能」页：进页面时读列表，点左侧读一份正文
+  const loadSkillList = useCallback(async () => {
+    const list = await hs.skillsList();
+    setSkillItems(list.items);
+    setSkillTargets(list.targets);
+    const first = list.items[0];
+    if (!first) return;
+    const f = await hs.skillsRead(first.id);
+    if (f.ok) {
+      setSkillId(first.id);
+      setSkillText(f.text || "");
+      setSkillSaved(f.text || "");
+    }
+  }, []);
+
+  const openSkill = useCallback(async (id: string) => {
+    const f = await hs.skillsRead(id);
+    if (!f.ok) {
+      setToast("读取失败：" + (f.error || "文件不存在"));
+      return;
+    }
+    setSkillId(id);
+    setSkillText(f.text || "");
+    setSkillSaved(f.text || "");
+  }, []);
+
+  useEffect(() => {
+    if (section === "skills") void loadSkillList();
+  }, [section, loadSkillList]);
+
+  const skillDirty = skillText !== skillSaved;
+
+  const saveSkill = async () => {
+    setSkillBusy(true);
+    try {
+      const r = await hs.skillsWrite(skillId, skillText);
+      if (r.ok) {
+        setSkillSaved(skillText);
+        setToast(`已保存 ${skillId}（${r.chars} 字）`);
+        const list = await hs.skillsList();
+        setSkillItems(list.items);
+        setSkillTargets(list.targets);
+      } else {
+        setToast("保存失败：" + (r.error || "无法写入文件"));
+      }
+    } finally {
+      setSkillBusy(false);
+    }
+  };
+
+  /** 新建技能：只收名称与一句描述，正文用模板打开，随后可直接编辑。 */
+  const createSkill = async () => {
+    const name = newSkillName.trim();
+    if (!name) {
+      setToast("先填技能名称");
+      return;
+    }
+    const r = await hs.skillsCreate(name, newSkillDesc.trim());
+    if (!r.ok || !r.id) {
+      setToast("新建失败：" + (r.error || "未知错误"));
+      return;
+    }
+    setNewSkillName("");
+    setNewSkillDesc("");
+    await loadSkillList();
+    await openSkill(r.id);
+    setToast(`已新建技能 ${r.id}`);
+  };
+
+  const removeSkill = async () => {
+    if (!skillId) return;
+    if (!window.confirm(`删除技能 ${skillId}？目录会被整个移除。`)) return;
+    const r = await hs.skillsDelete(skillId);
+    if (!r.ok) {
+      setToast("删除失败：" + (r.error || "未知错误"));
+      return;
+    }
+    setSkillId("");
+    setSkillText("");
+    setSkillSaved("");
+    await loadSkillList();
+    setToast(`已删除 ${r.id}`);
+  };
+
+  // 「MCP」页
+  const loadMcp = useCallback(async () => {
+    const j = await hs.mcpList();
+    setMcpServers(j.servers);
+    setMcpTargets(j.targets);
+    setMcpFile(j.file);
+  }, []);
+
+  useEffect(() => {
+    if (section === "mcp") void loadMcp();
+  }, [section, loadMcp]);
+
+  const editMcp = (s: McpServer) => {
+    setMcpId(s.id);
+    setMcpName(s.name);
+    setMcpCommand(s.command);
+    setMcpArgs((s.args || []).join(" "));
+    setMcpEnv(
+      Object.entries(s.env || {})
+        .map(([k, v]) => `${k}=${v}`)
+        .join("\n"),
+    );
+  };
+
+  const resetMcpForm = () => {
+    setMcpId("");
+    setMcpName("");
+    setMcpCommand("");
+    setMcpArgs("");
+    setMcpEnv("");
+  };
+
+  /** 环境变量按「一行一个 KEY=VALUE」输入，空行忽略。 */
+  const parseEnv = (text: string) => {
+    const env: Record<string, string> = {};
+    for (const line of text.split(/\r?\n/)) {
+      const i = line.indexOf("=");
+      if (i <= 0) continue;
+      const k = line.slice(0, i).trim();
+      const v = line.slice(i + 1).trim();
+      if (k) env[k] = v;
+    }
+    return env;
+  };
+
+  const saveMcp = async () => {
+    setMcpBusy(true);
+    try {
+      const r = await hs.mcpSave({
+        id: mcpId || undefined,
+        name: mcpName,
+        command: mcpCommand,
+        args: mcpArgs.split(/\s+/).filter(Boolean),
+        env: parseEnv(mcpEnv),
+        enabled: true,
+      });
+      if (!r.ok) {
+        setToast("保存失败：" + (r.error || "未知错误"));
+        return;
+      }
+      resetMcpForm();
+      await loadMcp();
+      setToast(`已保存 MCP：${r.server?.name}`);
+    } finally {
+      setMcpBusy(false);
+    }
+  };
+
+  const removeMcp = async (id: string) => {
+    if (!window.confirm("从注册表移除这条 MCP？已写入客户端配置的不会自动删除。")) return;
+    const r = await hs.mcpRemove(id);
+    if (!r.ok) {
+      setToast("删除失败：" + (r.error || "未知错误"));
+      return;
+    }
+    await loadMcp();
+    setToast("已移除");
+  };
+
+  const applyMcp = async (targetId: string) => {
+    const r = await hs.mcpApply(targetId);
+    if (!r.ok) {
+      setToast("写入失败：" + (r.error || "未知错误"));
+      return;
+    }
+    setToast(`已写入 ${targetId}（${r.count} 个）`);
+  };
 
   const saveMemory = async () => {
     setMemBusy(true);
@@ -196,6 +390,8 @@ export function App() {
           <TabList value={section} onChange={(v) => setSection(v as Section)} size="sm">
             <Tab value="targets" label="破甲目标" />
             <Tab value="memory" label="记忆" />
+            <Tab value="skills" label="技能" />
+            <Tab value="mcp" label="MCP" />
             <Tab value="about" label="关于" />
           </TabList>
 
@@ -269,6 +465,174 @@ export function App() {
                     onClick={() => setMemText(memSaved)}
                   />
                   <Button label="重新载入" variant="ghost" isDisabled={memBusy} onClick={() => void loadMemory()} />
+                </div>
+              </article>
+            </section>
+          )}
+
+          {section === "skills" && (
+            <section className="zx-resource">
+              <aside className="zx-resource__list">
+                <div className="zx-card__head">
+                  <h3>技能库</h3>
+                  <span className="zx-hint">{skillItems.length} 个</span>
+                </div>
+                <div className="zx-skill-list">
+                  {skillItems.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`zx-skill-item${s.id === skillId ? " is-active" : ""}`}
+                      onClick={() => void openSkill(s.id)}
+                    >
+                      <span className="zx-skill-item__name">{s.name || s.id}</span>
+                      <span className="zx-skill-item__id">
+                        {s.id} · {s.chars} 字
+                      </span>
+                    </button>
+                  ))}
+                  {!skillItems.length && <p className="zx-hint">还没有技能，用下面的表单新建。</p>}
+                </div>
+                <div className="zx-skill-new">
+                  <input
+                    className="zx-input"
+                    placeholder="技能名称（如 web-pentest）"
+                    value={newSkillName}
+                    onChange={(e) => setNewSkillName(e.target.value)}
+                  />
+                  <input
+                    className="zx-input"
+                    placeholder="一句描述（什么时候触发）"
+                    value={newSkillDesc}
+                    onChange={(e) => setNewSkillDesc(e.target.value)}
+                  />
+                  <Button label="新建技能" variant="secondary" onClick={() => void createSkill()} />
+                </div>
+              </aside>
+
+              <article className="zx-panel zx-resource__edit">
+                <div className="zx-card__head">
+                  <h3>{skillId || "选择技能"}</h3>
+                  <Badge variant={skillDirty ? "info" : "neutral"} label={skillDirty ? "未保存" : "已同步"} />
+                </div>
+                <p className="zx-card__desc">
+                  {skillId
+                    ? `${skillId}/SKILL.md · ${skillText.trim().length} 字 · 保存后重新安装目标，才会同步到客户端`
+                    : "从左侧选择一份技能，或在左下新建"}
+                </p>
+                <textarea
+                  className="zx-mem__text zx-skill-text"
+                  value={skillText}
+                  spellCheck={false}
+                  placeholder="选择左侧技能后在这里编辑 SKILL.md"
+                  onChange={(e) => setSkillText(e.target.value)}
+                />
+                <div className="zx-row">
+                  <Button
+                    label="保存"
+                    variant="primary"
+                    isDisabled={skillBusy || !skillDirty || !skillId}
+                    onClick={() => void saveSkill()}
+                  />
+                  <Button
+                    label="放弃改动"
+                    variant="secondary"
+                    isDisabled={skillBusy || !skillDirty}
+                    onClick={() => setSkillText(skillSaved)}
+                  />
+                  <Button label="重新载入" variant="ghost" isDisabled={skillBusy || !skillId} onClick={() => void openSkill(skillId)} />
+                  <Button label="删除技能" variant="ghost" isDisabled={skillBusy || !skillId} onClick={() => void removeSkill()} />
+                </div>
+                <div className="zx-skill-targets">
+                  {Object.entries(skillTargets).map(([id, t]) => (
+                    <span key={id} className="zx-skill-target" title={t.dir}>
+                      {id} · {t.count}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            </section>
+          )}
+
+          {section === "mcp" && (
+            <section className="zx-resource">
+              <aside className="zx-resource__list">
+                <div className="zx-card__head">
+                  <h3>MCP 服务器</h3>
+                  <span className="zx-hint">{mcpServers.length} 个</span>
+                </div>
+                <div className="zx-skill-list">
+                  {mcpServers.map((s) => (
+                    <div key={s.id} className={`zx-skill-item${s.id === mcpId ? " is-active" : ""}`}>
+                      <button type="button" className="zx-skill-item__pick" onClick={() => editMcp(s)}>
+                        <span className="zx-skill-item__name">{s.name}</span>
+                        <span className="zx-skill-item__id">
+                          {s.command} {(s.args || []).join(" ")}
+                        </span>
+                      </button>
+                      <button type="button" className="zx-link" onClick={() => void removeMcp(s.id)}>
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                  {!mcpServers.length && <p className="zx-hint">还没有 MCP，右侧新建一条。</p>}
+                </div>
+                <p className="zx-hint">注册表：{mcpFile || "—"}</p>
+              </aside>
+
+              <article className="zx-panel zx-resource__edit">
+                <div className="zx-card__head">
+                  <h3>{mcpId ? "编辑 MCP" : "新增 MCP"}</h3>
+                  <Badge variant="neutral" label={mcpId ? "编辑中" : "新建"} />
+                </div>
+                <div className="zx-form">
+                  <label>
+                    名称
+                    <input className="zx-input" value={mcpName} onChange={(e) => setMcpName(e.target.value)} placeholder="如 filesystem" />
+                  </label>
+                  <label>
+                    命令
+                    <input className="zx-input" value={mcpCommand} onChange={(e) => setMcpCommand(e.target.value)} placeholder="如 npx" />
+                  </label>
+                  <label>
+                    参数
+                    <input
+                      className="zx-input"
+                      value={mcpArgs}
+                      onChange={(e) => setMcpArgs(e.target.value)}
+                      placeholder="-y @modelcontextprotocol/server-filesystem D:\\data"
+                    />
+                  </label>
+                  <label>
+                    环境变量（一行一个 KEY=VALUE）
+                    <textarea
+                      className="zx-input zx-input--area"
+                      value={mcpEnv}
+                      onChange={(e) => setMcpEnv(e.target.value)}
+                      placeholder="API_KEY=xxx"
+                    />
+                  </label>
+                </div>
+                <div className="zx-row">
+                  <Button
+                    label="保存"
+                    variant="primary"
+                    isDisabled={mcpBusy || !mcpName.trim() || !mcpCommand.trim()}
+                    onClick={() => void saveMcp()}
+                  />
+                  <Button label="清空" variant="ghost" isDisabled={mcpBusy} onClick={resetMcpForm} />
+                </div>
+                <p className="zx-card__desc">写入客户端时会覆盖 mcpServers，原文件自动备份为 .zerox.bak：</p>
+                <div className="zx-row">
+                  {Object.keys(mcpTargets).map((t) => (
+                    <Button
+                      key={t}
+                      label={t}
+                      variant="secondary"
+                      isDisabled={mcpBusy || !mcpServers.length}
+                      onClick={() => void applyMcp(t)}
+                    />
+                  ))}
                 </div>
               </article>
             </section>

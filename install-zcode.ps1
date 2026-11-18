@@ -447,7 +447,7 @@ try {
     if ([string]::IsNullOrWhiteSpace($SkillsSource)) {
         $skillsSource = Join-Path $PSScriptRoot 'codex-skills'
     } else {
-        $skillsSource = Join-Path $PSScriptRoot $SkillsSource
+        $skillsSource = if ([System.IO.Path]::IsPathRooted($SkillsSource)) { $SkillsSource } else { Join-Path $PSScriptRoot $SkillsSource }
     }
     $skillsTarget = Join-Path $ZcodeHome 'skills'
     if (Test-Path -LiteralPath $skillsSource) {

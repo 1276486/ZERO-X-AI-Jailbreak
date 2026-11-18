@@ -112,7 +112,7 @@ if ([string]::IsNullOrWhiteSpace($SkillsSource)) {
     $seepSkills = Join-Path $PSScriptRoot 'seep-kit\Tool\skill'
     $SkillsSource = if (Test-Path -LiteralPath $seepSkills) { $seepSkills } else { Join-Path $PSScriptRoot 'codex-skills' }
 } else {
-    $SkillsSource = Join-Path $PSScriptRoot $SkillsSource
+    $SkillsSource = if ([System.IO.Path]::IsPathRooted($SkillsSource)) { $SkillsSource } else { Join-Path $PSScriptRoot $SkillsSource }
 }
 $skillsSource = $SkillsSource
 $skillsTarget = Join-Path $ClaudeHome 'skills'

@@ -213,6 +213,282 @@ function writeMemoryFile(name, text) {
   return { name: base, path: full, chars: String(text ?? "").trim().length };
 }
 
+// ---------- 技能库（用户目录） ----------
+
+/** 随包技能种子：resources/seep-kit/Tool/skill。 */
+const SKILL_DIR = path.join("seep-kit", "Tool", "skill");
+
+function bundledSkillRoot() {
+  return p(SKILL_DIR);
+}
+
+/** 用户技能目录：首次使用时由随包技能复制而来，之后以这里为准。 */
+function userSkillRoot() {
+  return path.join(app.getPath("userData"), "skills");
+}
+
+/** 从 SKILL.md 头部取 name / description（兼容 `description: >-` 这类块写法）。 */
+function parseSkillHeader(text, fallback) {
+  const lines = String(text).split(/\r?\n/);
+  let name = fallback;
+  let desc = "";
+  for (let i = 0; i < lines.length; i++) {
+    const mName = /^name:\s*(.+)$/.exec(lines[i]);
+    if (mName) name = mName[1].trim().replace(/^["']|["']$/g, "");
+    const mDesc = /^description:\s*(.*)$/.exec(lines[i]);
+    if (!mDesc) continue;
+    let v = mDesc[1].trim();
+    if (v === "" || v === ">" || v === ">-" || v === "|") {
+      const buf = [];
+      for (let j = i + 1; j < lines.length; j++) {
+        if (/^[A-Za-z_-]+:/.test(lines[j]) || /^#/.test(lines[j])) break;
+        if (lines[j].trim()) buf.push(lines[j].trim());
+      }
+      v = buf.join(" ");
+    }
+    desc = v.replace(/^["']|["']$/g, "");
+  }
+  return { name, desc };
+}
+
+/** 扫描技能根目录：顶层有 SKILL.md 算一个，只有子目录的再下探一层。 */
+function scanSkillDir(root) {
+  const items = [];
+  const push = (dir, id) => {
+    try {
+      const text = fs.readFileSync(path.join(dir, "SKILL.md"), "utf8");
+      const meta = parseSkillHeader(text, id);
+      items.push({ id, name: meta.name, desc: meta.desc.slice(0, 240), chars: text.trim().length });
+    } catch {
+      /* 没有 SKILL.md 就不是技能 */
+    }
+  };
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return items;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue;
+    const full = path.join(root, e.name);
+    if (fs.existsSync(path.join(full, "SKILL.md"))) {
+      push(full, e.name);
+      continue;
+    }
+    let subs = [];
+    try {
+      subs = fs.readdirSync(full, { withFileTypes: true }).filter((x) => x.isDirectory());
+    } catch {
+      /* 读不到就跳过 */
+    }
+    for (const s of subs) push(path.join(full, s.name), e.name + "/" + s.name);
+  }
+  return items.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** 第一次打开时把随包技能复制到用户目录；之后用户增删改都落在这里。 */
+function ensureUserSkills() {
+  const dst = userSkillRoot();
+  fs.mkdirSync(dst, { recursive: true });
+  if (scanSkillDir(dst).length) return dst;
+  try {
+    for (const e of fs.readdirSync(bundledSkillRoot(), { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      fs.cpSync(path.join(bundledSkillRoot(), e.name), path.join(dst, e.name), { recursive: true });
+    }
+  } catch {
+    /* 没有随包技能就留空目录 */
+  }
+  return dst;
+}
+
+/** 把技能 id（相对目录）解析成 SKILL.md 的绝对路径，并挡住目录穿越。 */
+function skillPath(id) {
+  const rel = String(id || "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  const parts = rel.split("/");
+  if (!parts.length || parts.some((x) => !x || x === "." || x === "..")) {
+    throw new Error("无效的技能 id");
+  }
+  const root = ensureUserSkills();
+  const full = path.join(root, ...parts, "SKILL.md");
+  if (!path.resolve(full).startsWith(path.resolve(root) + path.sep)) {
+    throw new Error("技能路径越界");
+  }
+  return full;
+}
+
+function readSkillFile(id) {
+  const full = skillPath(id);
+  return { id, path: full, text: fs.readFileSync(full, "utf8") };
+}
+
+function writeSkillFile(id, text) {
+  const full = skillPath(id);
+  fs.writeFileSync(full, String(text ?? ""), "utf8");
+  return { id, path: full, chars: String(text ?? "").trim().length };
+}
+
+/** 新建技能：目录名从英文/数字生成，正文给一份可直接编辑的模板。 */
+function createSkill(name, desc) {
+  const root = ensureUserSkills();
+  const base =
+    String(name || "skill")
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "skill";
+  let id = base;
+  for (let i = 2; fs.existsSync(path.join(root, id)); i++) id = `${base}-${i}`;
+  const dir = path.join(root, id);
+  fs.mkdirSync(dir, { recursive: true });
+  const text = [
+    "---",
+    `name: ${name || id}`,
+    `description: ${desc || ""}`,
+    "---",
+    "",
+    `# ${name || id}`,
+    "",
+    "## 适用范围",
+    "",
+    "（什么时候用这个技能：目标类型、触发条件。）",
+    "",
+    "## 步骤",
+    "",
+    "1. ",
+    "",
+    "## 输出格式",
+    "",
+    "（固定字段：结论、证据、下一步。）",
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(dir, "SKILL.md"), text, "utf8");
+  return { id, path: path.join(dir, "SKILL.md") };
+}
+
+/** 删除技能：只能删用户目录内的技能目录，不能删根。 */
+function deleteSkill(id) {
+  const full = skillPath(id);
+  const dir = path.dirname(full);
+  const root = path.resolve(ensureUserSkills());
+  if (path.resolve(dir) === root) throw new Error("不能删除技能根目录");
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { id };
+}
+
+/** 各客户端 skills 目录里已同步的技能数，用来在界面上显示「装了几个」。 */
+function skillSyncState() {
+  const home = homeDir();
+  const xdg = process.env.XDG_CONFIG_HOME || path.join(home, ".config");
+  const dirs = {
+    codex: path.join(codexHome(), "skills"),
+    zcode: path.join(home, ".zcode", "skills"),
+    claude: path.join(home, ".claude", "skills"),
+    opencode: path.join(xdg, "opencode", "skills"),
+    dsh: path.join(home, ".dsh", "skills"),
+    workbuddy: path.join(home, ".workbuddy-ai", "skills"),
+    "workbuddy-cn": path.join(home, ".workbuddy", "skills"),
+  };
+  const out = {};
+  for (const [id, dir] of Object.entries(dirs)) {
+    let count = 0;
+    try {
+      count = fs
+        .readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, "SKILL.md"))).length;
+    } catch {
+      count = 0;
+    }
+    out[id] = { dir, count };
+  }
+  return out;
+}
+
+// ---------- MCP 服务器 ----------
+
+/** MCP 注册表：<userData>/mcp.json。程序只保存清单，写入由「应用」按钮完成。 */
+function mcpFile() {
+  return path.join(app.getPath("userData"), "mcp.json");
+}
+
+function readMcpServers() {
+  try {
+    const j = JSON.parse(fs.readFileSync(mcpFile(), "utf8"));
+    return Array.isArray(j.servers) ? j.servers : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeMcpServers(list) {
+  fs.mkdirSync(path.dirname(mcpFile()), { recursive: true });
+  fs.writeFileSync(mcpFile(), JSON.stringify({ servers: list }, null, 2), "utf8");
+  return list;
+}
+
+function upsertMcpServer(input) {
+  const name = String((input && input.name) || "").trim();
+  const command = String((input && input.command) || "").trim();
+  if (!name || !command) throw new Error("名称和命令不能为空");
+  const list = readMcpServers();
+  const server = {
+    id: String((input && input.id) || "").trim() || "mcp-" + Date.now().toString(36),
+    name,
+    command,
+    args: Array.isArray(input.args)
+      ? input.args.map(String)
+      : String(input.args || "").split(/\s+/).filter(Boolean),
+    env: input.env && typeof input.env === "object" ? input.env : {},
+    enabled: input.enabled !== false,
+  };
+  const i = list.findIndex((x) => x.id === server.id);
+  if (i >= 0) list[i] = server;
+  else list.push(server);
+  writeMcpServers(list);
+  return server;
+}
+
+function removeMcpServer(id) {
+  writeMcpServers(readMcpServers().filter((x) => x.id !== id));
+  return { id };
+}
+
+/** 能接收 MCP 配置的三个位置；写入前原文件另存 .zerox.bak。 */
+function mcpTargets() {
+  const home = homeDir();
+  const appData = process.env.APPDATA || path.join(home, "AppData", "Roaming");
+  return {
+    "claude-desktop": path.join(appData, "Claude", "claude_desktop_config.json"),
+    "claude-code": path.join(home, ".claude.json"),
+    cursor: path.join(home, ".cursor", "mcp.json"),
+  };
+}
+
+function applyMcpServers(targetId) {
+  const target = mcpTargets()[targetId];
+  if (!target) throw new Error("不支持的 MCP 目标");
+  const servers = readMcpServers().filter((s) => s.enabled);
+  const map = {};
+  for (const s of servers) map[s.name] = { command: s.command, args: s.args || [], env: s.env || {} };
+  let data = {};
+  try {
+    data = JSON.parse(fs.readFileSync(target, "utf8"));
+  } catch {
+    data = {};
+  }
+  if (fs.existsSync(target)) {
+    try {
+      fs.writeFileSync(target + ".zerox.bak", fs.readFileSync(target, "utf8"), "utf8");
+    } catch {
+      /* 备份失败不影响写入 */
+    }
+  }
+  data.mcpServers = map;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, JSON.stringify(data, null, 2), "utf8");
+  return { target: targetId, path: target, count: Object.keys(map).length };
+}
+
 /**
    各目标的安装参数。提示词统一取 memory/ 里用户自己填的那一份。
 */
@@ -221,54 +497,63 @@ function installArgs(targetId, promptFile) {
   if (!script) throw new Error("未知目标: " + targetId);
   const file = p(script);
 
-  switch (targetId) {
-    case "codex":
-      // 额外写一份 <CodexHome>\AGENTS.md：config.toml 会被 Codex 自己重写，AGENTS.md 不会丢
-      return [
-        "-File", file,
-        "-SourcePrompt", promptFile,
+  // 支持 -SkillsSource 的目标：技能源统一指向用户技能目录（绝对路径）。
+  const skills = ["codex", "zcode", "claude", "opencode", "dsh"].includes(targetId)
+    ? ["-SkillsSource", ensureUserSkills()]
+    : [];
 
-        "-InjectAgents",
-        "-AgentsKnown", promptFile,
-      ];
-    case "zcode":
-      return [
-        "-File", file,
-        "-PatchSystemPrompt",
-        "-SourcePrompt", promptFile,
-        "-MemorySourcePrompt", promptFile,
+  const base = (() => {
+    switch (targetId) {
+      case "codex":
+        // 额外写一份 <CodexHome>\AGENTS.md：config.toml 会被 Codex 自己重写，AGENTS.md 不会丢
+        return [
+          "-File", file,
+          "-SourcePrompt", promptFile,
 
-      ];
-    case "claude":
-      return [
-        "-File", file,
-        "-SourcePrompt", promptFile,
+          "-InjectAgents",
+          "-AgentsKnown", promptFile,
+        ];
+      case "zcode":
+        return [
+          "-File", file,
+          "-PatchSystemPrompt",
+          "-SourcePrompt", promptFile,
+          "-MemorySourcePrompt", promptFile,
 
-        "-KnownPrompts", promptFile,
-      ];
-    case "opencode":
-      // 全局规则写 ~/.config/opencode/AGENTS.md，技能落 ~/.config/opencode/skills
-      return [
-        "-File", file,
-        "-SourcePrompt", promptFile,
+        ];
+      case "claude":
+        return [
+          "-File", file,
+          "-SourcePrompt", promptFile,
 
-        "-KnownPrompts", promptFile,
-      ];
-    case "workbuddy":
-      return ["-File", file, "-SourcePrompt", promptFile];
-    case "workbuddy-cn":
-      // 国内版数据目录固定 ~/.workbuddy，自动探测会先命中 .workbuddy-ai
-      return [
-        "-File", file,
-        "-SourcePrompt", promptFile,
+          "-KnownPrompts", promptFile,
+        ];
+      case "opencode":
+        // 全局规则写 ~/.config/opencode/AGENTS.md，技能落 ~/.config/opencode/skills
+        return [
+          "-File", file,
+          "-SourcePrompt", promptFile,
 
-        "-ConfigDir", path.join(homeDir(), ".workbuddy"),
-      ];
-    case "dsh":
-      return ["-File", file, "-SourcePrompt", promptFile];
-    default:
-      return ["-File", file, "-SourcePrompt", promptFile];
-  }
+          "-KnownPrompts", promptFile,
+        ];
+      case "workbuddy":
+        return ["-File", file, "-SourcePrompt", promptFile];
+      case "workbuddy-cn":
+        // 国内版数据目录固定 ~/.workbuddy，自动探测会先命中 .workbuddy-ai
+        return [
+          "-File", file,
+          "-SourcePrompt", promptFile,
+
+          "-ConfigDir", path.join(homeDir(), ".workbuddy"),
+        ];
+      case "dsh":
+        return ["-File", file, "-SourcePrompt", promptFile];
+      default:
+        return ["-File", file, "-SourcePrompt", promptFile];
+    }
+  })();
+
+  return [...base, ...skills];
 }
 
 
@@ -452,6 +737,68 @@ function registerIpc() {
   ipcMain.handle("tool:memory:write", (_e, payload) => {
     try {
       return { ok: true, ...writeMemoryFile(payload && payload.name, payload && payload.text) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+
+  /** 技能页：列出用户技能库、读/写正文、新建、删除；附带各客户端已同步数量。 */
+  ipcMain.handle("tool:skills:list", () => {
+    ensureUserSkills();
+    return { root: userSkillRoot(), items: scanSkillDir(userSkillRoot()), targets: skillSyncState() };
+  });
+  ipcMain.handle("tool:skills:read", (_e, id) => {
+    try {
+      return { ok: true, ...readSkillFile(id) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+  ipcMain.handle("tool:skills:write", (_e, payload) => {
+    try {
+      return { ok: true, ...writeSkillFile(payload && payload.id, payload && payload.text) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+  ipcMain.handle("tool:skills:create", (_e, payload) => {
+    try {
+      return { ok: true, ...createSkill(payload && payload.name, payload && payload.description) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+  ipcMain.handle("tool:skills:delete", (_e, id) => {
+    try {
+      return { ok: true, ...deleteSkill(id) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+
+  /** MCP：注册表增删改，以及把启用项写入客户端的 mcpServers。 */
+  ipcMain.handle("tool:mcp:list", () => ({
+    file: mcpFile(),
+    servers: readMcpServers(),
+    targets: mcpTargets(),
+  }));
+  ipcMain.handle("tool:mcp:save", (_e, payload) => {
+    try {
+      return { ok: true, server: upsertMcpServer(payload || {}) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+  ipcMain.handle("tool:mcp:remove", (_e, id) => {
+    try {
+      return { ok: true, ...removeMcpServer(id) };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    }
+  });
+  ipcMain.handle("tool:mcp:apply", (_e, targetId) => {
+    try {
+      return { ok: true, ...applyMcpServers(targetId) };
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) };
     }
@@ -733,6 +1080,28 @@ async function captureAll(dir) {
       return 'memory-open|' + (w.ok ? 'write-ok|' + w.chars : 'write-fail|' + w.error);
     })()`],
     ["03-about", clickText("关于")],
+    ["06-skills", `(async () => {
+      const b = [...document.querySelectorAll('[role="tab"],button')].find(x=>((x.innerText||'').trim()==='技能'));
+      if (!b) return 'no-tab';
+      b.click();
+      await new Promise((r) => setTimeout(r, 1200));
+      return 'skills-open';
+    })()`],
+    ["07-mcp", `(async () => {
+      const b = [...document.querySelectorAll('[role="tab"],button')].find(x=>((x.innerText||'').trim()==='MCP'));
+      if (!b) return 'no-tab';
+      b.click();
+      await new Promise((r) => setTimeout(r, 900));
+      return 'mcp-open';
+    })()`],
+    // 技能页顺带做一次增删自检：新建 → 写正文 → 删除，全程落在用户技能目录
+    ["08-skill-crud", `(async () => {
+      const c = await window.hs.skillsCreate('smoke-test', '自检用临时技能');
+      if (!c.ok) return 'create-fail|' + c.error;
+      const w = await window.hs.skillsWrite(c.id, '---\\nname: smoke-test\\ndescription: 自检\\n---\\n');
+      const d = await window.hs.skillsDelete(c.id);
+      return 'crud|' + (w.ok ? 'write-ok' : 'write-fail') + '|' + (d.ok ? 'delete-ok' : 'delete-fail');
+    })()`],
     ["04-tutorial", `(async () => {
       const click = (t) => { const b=[...document.querySelectorAll('[role="tab"],[role="button"],button')].find(x=>((x.innerText||x.textContent||'').trim()===t)); if(b){b.click();return true} return false };
       click('关于');

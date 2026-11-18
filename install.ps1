@@ -128,7 +128,7 @@ $statePath = Join-Path $managedDir 'install-state.json'
 if ([string]::IsNullOrWhiteSpace($SkillsSource)) {
     $SkillsSource = Join-Path $PSScriptRoot 'codex-skills'
 } else {
-    $SkillsSource = Join-Path $PSScriptRoot $SkillsSource
+    $SkillsSource = if ([System.IO.Path]::IsPathRooted($SkillsSource)) { $SkillsSource } else { Join-Path $PSScriptRoot $SkillsSource }
 }
 $skillsSource = $SkillsSource
 $skillsTarget = Join-Path $CodexHome 'skills'

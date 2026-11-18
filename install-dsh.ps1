@@ -102,7 +102,7 @@ if ([string]::IsNullOrWhiteSpace($SkillsSource)) {
     $seepSkills = Join-Path $PSScriptRoot 'seep-kit\Tool\skill'
     $SkillsSource = if (Test-Path -LiteralPath $seepSkills) { $seepSkills } else { Join-Path $PSScriptRoot 'codex-skills' }
 } else {
-    $SkillsSource = Join-Path $PSScriptRoot $SkillsSource
+    $SkillsSource = if ([System.IO.Path]::IsPathRooted($SkillsSource)) { $SkillsSource } else { Join-Path $PSScriptRoot $SkillsSource }
 }
 # 懒人包模式：技能取包内 materials/skills，忽略 -SkillsSource
 $skillsSource = if ($isKitMode) { Join-Path $packageRoot 'materials\skills' } else { $SkillsSource }

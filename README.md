@@ -65,6 +65,10 @@ ZERO-X破甲 是一个**指令注入管理器**，随包附带一份**调教好�
 |---|---|
 | <img src="docs/screenshots/drawer.png" alt="目标详情" width="440"> | <img src="docs/screenshots/about.png" alt="关于" width="440"> |
 
+| 技能页：新建 / 编辑 / 删除 | MCP 页：清单与一键写入 |
+|---|---|
+| <img src="docs/screenshots/skills.png" alt="技能页" width="440"> | <img src="docs/screenshots/mcp.png" alt="MCP 页" width="440"> |
+
 ---
 
 ## 交流群
@@ -97,7 +101,8 @@ ZERO-X破甲 是一个**指令注入管理器**，随包附带一份**调教好�
 ## 2. 功能特性
 
 - **九个目标，独立安装 / 独立撤销**，互不影响。
-- **随包技能库**：Claude、OpenCode、DeepSeek Harness 安装时同步技能（9 个 SKILL.md），其余目标按各自机制只注入指令。
+- **技能页**：随包 9 个技能，可直接新建、编辑、删除；安装时作为技能源同步到 Codex、ZCode、Claude、OpenCode、DSH。
+- **MCP 页**：维护自己的 MCP 服务器清单，一键写入 Claude Desktop、Claude Code、Cursor，原文件自动备份为 `.zerox.bak`。
 - **不写半成品**：指令正文为空时安装直接失败并提示，不会把空内容写进用户配置。
 - **可反复执行**：重复安装不会叠加副作用；脚本内部按标记定位注入块。
 - **两种撤销方式**：
@@ -188,6 +193,18 @@ ZERO-X
 - 保存后在「破甲目标」重新安装一次，或重启目标软件，改动才生效。
 - 开发目录里的 `memory/` 会在打包时复制到 `resources/memory/`；**安装包内的这份是快照**，想改已安装的版本，要么在程序的「记忆」页改，要么重新打包。
 - 卸载不会修改 `memory/` 里的任何文件。
+
+### 技能（技能页）
+
+- 技能存放在 `%APPDATA%\zerox-free\skills`，首次启动时由随包技能复制而来，之后以这里为准。
+- 「技能」页可新建、编辑、删除；保存后重新安装目标，才会同步到客户端。
+- 安装时，Codex / ZCode / Claude / OpenCode / DSH 会用这个目录作为技能源；Cursor、豆包没有技能机制。
+
+### MCP（MCP 页）
+
+- 清单存放在 `%APPDATA%\zerox-free\mcp.json`，程序只维护这份注册表。
+- 「MCP」页可新增、编辑、移除；「写入」会把启用项合并进客户端的 `mcpServers`，原文件自动备份为 `.zerox.bak`。
+- 写入位置：Claude Desktop `%APPDATA%\Claude\claude_desktop_config.json`、Claude Code `~/.claude.json`、Cursor `~/.cursor/mcp.json`。
 
 ---
 
@@ -338,15 +355,15 @@ node scripts/build.mjs pro
 
 | 文件 | 位置 |
 |---|---|
-| 安装器 `ZERO-X破甲-安装版-4.5.1.exe` | `release/` |
-| 便携包 `ZERO-X破甲-便携版-4.5.1.zip` | `release/` |
+| 安装器 `ZERO-X破甲-安装版-4.5.2.exe` | `release/` |
+| 便携包 `ZERO-X破甲-便携版-4.5.2.zip` | `release/` |
 | 免安装目录 `win-unpacked/` | `release/` |
 | 安装包内资源（脚本、memory、icon） | `release/win-unpacked/resources/` |
 
 ### 9.2 版本号有两个
 
 - **界面显示版本**：`variant.json` 的 `version`（当前 `2.0`），由构建写入；
-- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.1`）。
+- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.2`）。
 
 ### 9.3 卸载清理
 
@@ -444,7 +461,7 @@ node scripts/build.mjs pro
 | 项 | 值 |
 |---|---|
 | 界面版本 | 见 `variant.json`（当前 2.0） |
-| 安装包版本 | 见 `package.json`（当前 4.5.1） |
+| 安装包版本 | 见 `package.json`（当前 4.5.2） |
 | 交流群 | 764635322 |
 | 中转站 | https://tuomi.club · 1 元 = 官方 10 元额度 · `deepseek-v4.1-flash` 1 折起 · 满血不限速 |
 
