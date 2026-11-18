@@ -97,6 +97,7 @@ ZERO-X破甲 是一个**指令注入管理器**，随包附带一份**调教好�
 ## 2. 功能特性
 
 - **九个目标，独立安装 / 独立撤销**，互不影响。
+- **随包技能库**：Claude、OpenCode、DeepSeek Harness 安装时同步技能（9 个 SKILL.md），其余目标按各自机制只注入指令。
 - **不写半成品**：指令正文为空时安装直接失败并提示，不会把空内容写进用户配置。
 - **可反复执行**：重复安装不会叠加副作用；脚本内部按标记定位注入块。
 - **两种撤销方式**：
@@ -270,6 +271,7 @@ zero-x/
 │  ├─ purge-residue.ps1           历史残留清理（默认 dry-run）
 │  └─ scan-secrets.mjs            发布前敏感信息扫描
 ├─ build/                 图标（png/ico）与 NSIS 钩子 installer.nsh
+├─ seep-kit/Tool/skill    随包技能库（9 个 SKILL.md，Claude / OpenCode / DSH 安装时同步）
 ├─ dist/                  渲染层构建产物（由 vite 生成）
 ├─ release/               安装包、win-unpacked、便携 zip
 ├─ variant.json           构建变体与界面版本号
@@ -336,15 +338,15 @@ node scripts/build.mjs pro
 
 | 文件 | 位置 |
 |---|---|
-| 安装器 `ZERO-X破甲-安装版-4.5.0.exe` | `release/` |
-| 便携包 `ZERO-X破甲-便携版-4.5.0.zip` | `release/` |
+| 安装器 `ZERO-X破甲-安装版-4.5.1.exe` | `release/` |
+| 便携包 `ZERO-X破甲-便携版-4.5.1.zip` | `release/` |
 | 免安装目录 `win-unpacked/` | `release/` |
 | 安装包内资源（脚本、memory、icon） | `release/win-unpacked/resources/` |
 
 ### 9.2 版本号有两个
 
 - **界面显示版本**：`variant.json` 的 `version`（当前 `2.0`），由构建写入；
-- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.0`）。
+- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.1`）。
 
 ### 9.3 卸载清理
 
@@ -442,7 +444,7 @@ node scripts/build.mjs pro
 | 项 | 值 |
 |---|---|
 | 界面版本 | 见 `variant.json`（当前 2.0） |
-| 安装包版本 | 见 `package.json`（当前 4.5.0） |
+| 安装包版本 | 见 `package.json`（当前 4.5.1） |
 | 交流群 | 764635322 |
 | 中转站 | https://tuomi.club · 1 元 = 官方 10 元额度 · `deepseek-v4.1-flash` 1 折起 · 满血不限速 |
 
