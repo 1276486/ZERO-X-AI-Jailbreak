@@ -329,6 +329,15 @@ if ($Uninstall -or $RestoreMemory) {
     exit 0
 }
 
+# 豆包全局记忆上限：实测 12,000 字符可写，12,100 起返回 params invalid。
+# 超限时直接报错，不要写进去再回读失败。
+if ($srcText.Length -gt 12000) {
+    Write-Host "  [×] 指令文件 $($srcText.Length) 字符，超过豆包全局记忆上限 12000 字符。" -ForegroundColor Red
+    Write-Host "      改用针对短提示词：memory/针对/doubao.md，或在界面上切换为「针对短提示词」。" -ForegroundColor Yellow
+    Write-Log "Abort: prompt too long $($srcText.Length) > 12000"
+    exit 2
+}
+
 # 备份（只在首次注入时备份，别把注入后的内容当原始记忆备份了）
 $before = Read-AgentsMd $ws
 Write-Host "  写入前   : $($before.len) 字符"

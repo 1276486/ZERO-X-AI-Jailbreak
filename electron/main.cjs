@@ -885,8 +885,20 @@ function registerIpc() {
     if (!SCRIPTS[targetId]) {
       return { ok: false, code: -1, timedOut: false, out: `未知的破甲目标：${targetId}`, installed };
     }
-    const useTargeted = mode === "targeted";
-    const prompt = useTargeted ? targetedPrompt(targetId) : memoryPrompt();
+    let useTargeted = mode === "targeted";
+    let prompt = useTargeted ? targetedPrompt(targetId) : memoryPrompt();
+    // 豆包云端全局记忆实测上限 12,000 字符：全量超限时自动换成针对短提示词
+    if (!useTargeted && targetId === "doubao" && prompt && prompt.chars > 12000) {
+      const small = targetedPrompt("doubao");
+      if (small) {
+        send("tool:log", {
+          label: "豆包",
+          text: `完整提示词 ${prompt.chars} 字超过云端上限 12000，已自动改用 ${small.name}\n`,
+        });
+        prompt = small;
+        useTargeted = true;
+      }
+    }
     if (!prompt) {
       const text = useTargeted
         ? `没有可用的针对提示词：请在 ${p(MEMORY_DIR, "针对")} 下放 ${targetId}.md 或 默认.md`

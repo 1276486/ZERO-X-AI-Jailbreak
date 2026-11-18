@@ -131,7 +131,7 @@ ZERO-X破甲 是一个**指令注入管理器**，随包附带一份**调教好�
 | WorkBuddy（国际版） | `install-workbuddy.ps1` | `~/.workbuddy-ai/memory/<uid>_memory.md`、`MEMORY.md`、`app/app-config.json`、`skills/` | 云记忆档案写入 `Version: 999999` 触发守卫，防云端回写覆盖 |
 | WorkBuddy（国内版） | `install-workbuddy.ps1 -ConfigDir ~/.workbuddy` | 同上，数据目录换成 `~/.workbuddy` | 数据目录必须显式指定，否则会探测到国际版 |
 | DeepSeek Harness | `install-dsh.ps1` | `~/.dsh/AGENTS.md` | 支持 `-KitRoot` 懒人包模式 |
-| 豆包 | `install-doubao.ps1` | **云端全局记忆**（无本地文件） | 通过 CDP 驱动客户端登录态调用云端接口；需要 `--remote-debugging-port=9222` |
+| 豆包 | `install-doubao.ps1` | **云端全局记忆**（无本地文件） | 通过 CDP 驱动客户端登录态调用云端接口；需要 `--remote-debugging-port=9222`；记忆上限实测 **12,000 字符**，超限会自动改用针对短提示词 |
 
 > 目标清单、界面文案集中在 `src/data/targets.ts`；脚本与目标 id 的映射在 `electron/main.cjs` 的 `SCRIPTS` 常量里。
 
@@ -196,7 +196,7 @@ ZERO-X
 - 保存后在「破甲目标」重新安装一次，或重启目标软件，改动才生效。
 - 开发目录里的 `memory/` 会在打包时复制到 `resources/memory/`；**安装包内的这份是快照**，想改已安装的版本，要么在程序的「记忆」页改，要么重新打包。
 - 卸载不会修改 `memory/` 里的任何文件。
-- **针对注入**：在「破甲目标」上方把注入模式切成「针对短提示词」，安装时会读 `memory/针对/<目标 id>.md`（如 `workbuddy.md`）；没有该文件就用 `memory/针对/默认.md`，再没有就用随包的 `zerox-core` 技能。当前短提示词 2–3k 字，WorkBuddy 的 10000 字符记忆上限也放得下。
+- **针对注入**：在「破甲目标」上方把注入模式切成「针对短提示词」，安装时会读 `memory/针对/<目标 id>.md`（已有 `workbuddy.md`、`doubao.md`）；没有该文件就用 `memory/针对/默认.md`，再没有就用随包的 `zerox-core` 技能。短提示词 2–3k 字：WorkBuddy 的 10,000 字符上限、豆包的 12,000 字符上限都放得下；豆包即使选了全量模式，超限也会自动切换。
 
 ### 技能（技能页）
 
@@ -359,15 +359,15 @@ node scripts/build.mjs pro
 
 | 文件 | 位置 |
 |---|---|
-| 安装器 `ZERO-X破甲-安装版-4.5.3.exe` | `release/` |
-| 便携包 `ZERO-X破甲-便携版-4.5.3.zip` | `release/` |
+| 安装器 `ZERO-X破甲-安装版-4.5.4.exe` | `release/` |
+| 便携包 `ZERO-X破甲-便携版-4.5.4.zip` | `release/` |
 | 免安装目录 `win-unpacked/` | `release/` |
 | 安装包内资源（脚本、memory、icon） | `release/win-unpacked/resources/` |
 
 ### 9.2 版本号有两个
 
 - **界面显示版本**：`variant.json` 的 `version`（当前 `2.0`），由构建写入；
-- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.3`）。
+- **安装包文件名版本**：`package.json` 的 `version`（当前 `4.5.4`）。
 
 ### 9.3 卸载清理
 
@@ -465,7 +465,7 @@ node scripts/build.mjs pro
 | 项 | 值 |
 |---|---|
 | 界面版本 | 见 `variant.json`（当前 2.0） |
-| 安装包版本 | 见 `package.json`（当前 4.5.3） |
+| 安装包版本 | 见 `package.json`（当前 4.5.4） |
 | 交流群 | 764635322 |
 | 中转站 | https://tuomi.club · 1 元 = 官方 10 元额度 · `deepseek-v4.1-flash` 1 折起 · 满血不限速 · 兑换码在站点「兑换码填写处」或「公告栏」获取购买链接 |
 
