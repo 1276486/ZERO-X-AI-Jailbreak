@@ -46,3 +46,6 @@ dist_nuitka/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# 截图验收临时目录
+docs-capture*/
